@@ -1,29 +1,79 @@
-Module 03 – Guardrails
 
-No hallucinations:
+---
 
-Source-only policy: Only use paper_text content. Prohibit external facts or assumptions.
+## Core Logic
 
-Section isolation: Never blend content across sections.
+### Step 1 — Normalize Text
+- Trim whitespace  
+- `word_count = len(section_text.split())`  
+- Initialize flags to `False`  
+- Initialize `warnings = []`  
+- Set `sanitized_section_text = section_text`
 
-Evidence mode enforcement:
+---
 
-normal: Allow cautious condensation; avoid speculative expansion.
+### Step 2 — Missing or Empty Check
+If `section_text` is empty, `None`, or contains no meaningful characters:
+- `is_missing_or_empty = True`
+- Append missing-section warning
+- `sanitized_section_text = ""`
+- **Return immediately** (no summarization allowed)
 
-strict: Summaries must contain only explicit statements found verbatim or unambiguously paraphrased from the text.
+---
 
-Insufficient detail: When strict mode lacks sufficient explicit support, insert:"The source text does not provide enough detail to summarize this section in strict evidence mode."
+### Step 3 — Very Short Section Check (< 50 words)
+If `word_count < 50`:
+- `is_too_short = True`
+- Append “very short” warning
 
-Standardized warnings:
+Summarization **can continue**, but user must be warned.
 
-Missing/empty: "Section skipped: no usable text was provided."
+---
 
-Very short: "Section very short: summary may be incomplete."
+### Step 4 — Evidence Mode Enforcement
 
-Chunking integrity:
+#### 👉 Case 1: evidence_mode = `"normal"`
+- Allow cautious paraphrasing  
+- No fabrication allowed  
+- Only use information traceable to the text  
 
-Ownership: Each chunk belongs to exactly one section.
+#### 👉 Case 2: evidence_mode = `"strict"`
+- Must use ONLY explicit statements  
+- NO inference  
+- NO external knowledge  
+- NO generalization  
 
-No cross-chunk contamination: Do not aggregate claims from other sections.
+If section has **high-level text only**, or lacks enough detail:
+- `strict_insufficient_detail = True`
+- Append strict-evidence warning
+- Section Loop must skip normal summarization  
+and use the warning **as the summary text**
 
-Limit reporting: If chunking or extraction limits fidelity, record under # Checks & Warnings.
+---
+
+### Step 5 — Chunk Integrity
+If section is chunked due to long length:
+- Concatenate only chunks belonging to `section_id`
+- Never merge chunk text across different sections
+- Ensure the final text still reflects the same section
+
+---
+
+### Step 6 — Return Guardrails Response
+Return:
+
+- `sanitized_section_text`
+- `is_missing_or_empty`
+- `is_too_short`
+- `strict_insufficient_detail`
+- `warnings`
+
+---
+
+## Behavioral Rules Summary
+
+- Do not hallucinate or invent details  
+- Must use warning messages exactly as written  
+- Strict mode overrides normal summarization  
+- Always preserve section boundaries  
+- Maintain transparent limitations  
